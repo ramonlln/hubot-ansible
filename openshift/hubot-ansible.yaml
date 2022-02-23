@@ -13,7 +13,7 @@ metadata:
       configuration.
     openshift.io/provider-display-name: Red Hat, Inc.
     template.openshift.io/bindable: 'false'
-message: 'The following service(s) have been created in your project: ${NAME}.'
+message: 'The following service(s) have been created in your project: ansible.'
 labels:
   template: hubot-ansible
   app: hubot-ansible
@@ -44,7 +44,7 @@ objects:
 - kind: Service
   apiVersion: v1
   metadata:
-    name: "hubot-${NAME}"
+    name: "hubot-ansible"
     annotations:
       description: Exposes and load balances the application pods
   spec:
@@ -53,17 +53,17 @@ objects:
       port: 8080
       targetPort: 8080
     selector:
-      name: "hubot-${NAME}"
+      name: "hubot-ansible"
 - kind: ImageStream
   apiVersion: v1
   metadata:
-    name: "hubot-${NAME}"
+    name: "hubot-ansible"
     annotations:
       description: Keeps track of changes in the application image
 - kind: BuildConfig
   apiVersion: v1
   metadata:
-    name: "hubot-${NAME}"
+    name: "hubot-ansible"
     annotations:
       description: Defines how to build the application
       template.alpha.openshift.io/wait-for-ready: 'true'
@@ -86,14 +86,14 @@ objects:
     output:
       to:
         kind: ImageStreamTag
-        name: "hubot-${NAME}:latest"
+        name: "hubot-ansible:latest"
     triggers:
     - type: ImageChange
     - type: ConfigChange
 - kind: DeploymentConfig
   apiVersion: v1
   metadata:
-    name: "hubot-${NAME}"
+    name: "hubot-ansible"
     annotations:
       description: Defines how to deploy the application server
       template.alpha.openshift.io/wait-for-ready: 'true'
@@ -108,19 +108,19 @@ objects:
         - hubot-ansible
         from:
           kind: ImageStreamTag
-          name: "hubot-${NAME}:latest"
+          name: "hubot-ansible:latest"
     - type: ConfigChange
     replicas: 1
     selector:
-      name: "hubot-${NAME}"
+      name: "hubot-ansible"
     template:
       metadata:
-        name: "hubot-${NAME}"
+        name: "hubot-ansible"
         labels:
-          name: "hubot-${NAME}"
+          name: "hubot-ansible"
       spec:
         containers:
-        - name: "hubot-${NAME}"
+        - name: "hubot-ansible"
           image: " "
           ports:
           - containerPort: 8080
@@ -129,7 +129,7 @@ objects:
               memory: "${MEMORY_LIMIT}"
           env:
             - name: HUBOT_HCCM_ADMIN_API_HOST
-              value: "${NAME}-masu.${NAMESPACE}.svc.cluster.local"
+              value: "ansible-sbr.${NAMESPACE}.svc.cluster.local"
             - name: HUBOT_SLACK_TOKEN
               value: "${SLACK_TOKEN}"
             - name: HUBOT_WHITELIST
