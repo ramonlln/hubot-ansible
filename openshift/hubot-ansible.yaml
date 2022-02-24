@@ -27,18 +27,9 @@ objects:
   spec:
     tags:
     - name: '14'
-      annotations:
-        openshift.io/display-name: Node.js latest
-        openshift.io/provider-display-name: Red Hat, Inc.
-        description: Build and run Node.js 10 applications on CentOS 7. For more information
-          about using this builder image, including OpenShift considerations, see https://github.com/nodeshift/centos7-s2i-nodejs.
-        iconClass: icon-nodejs
-        tags: builder,nodejs
-        version: '14:1-56'
-        sampleRepo: https://github.com/sclorg/nodejs-ex.git
       from:
         kind: DockerImage
-        name: registry.redhat.io/ubi8/nodejs
+        name: registry.redhat.io/ubi8/nodejs-14
       referencePolicy:
         type: Local
 - kind: Service
