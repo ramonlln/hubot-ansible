@@ -125,6 +125,8 @@ objects:
               value: "${SLACK_TOKEN}"
             - name: HUBOT_WHITELIST
               value: "${SLACK_CHANNEL_WHITELIST}"
+            - name: REDIS_URL
+              value: "${REDIS_URL}"
 parameters:
 - name: NAME
   displayName: Name
@@ -170,3 +172,7 @@ parameters:
 - name: SLACK_CHANNEL_WHITELIST
   displayName: Slack channel white list for Hubot
   description: The Slack channel white list interacting with Hubot
+- name: REDIS_URL
+  displayName: Redis for Hubot
+  description: Redis for persistent Hubot
+  value: ''
