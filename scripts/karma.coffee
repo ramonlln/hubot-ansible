@@ -35,6 +35,10 @@ class Karma
     @cache[thing] ?= 0
     @cache[thing] += 1
     @robot.brain.data.karma = @cache
+
+  latest: (latestKarma) ->
+    @cache[latest] = latestKarma
+    @robot.brain.data.karma = @cache
   
   decrement: (thing) ->
     @cache[thing] ?= 0
@@ -74,6 +78,14 @@ module.exports = (robot) ->
     subject = msg.match[1].toLowerCase()
     if allow_self is true or msg.message.user.name.toLowerCase() != subject
       karma.increment subject
+      msg.send "#{subject} has #{karma.get(subject)} points"
+    else
+      msg.send msg.random karma.selfDeniedResponses(msg.message.user.name)   
+
+  robot.hear /^\+\+$/, (msg) ->
+    subject = msg.match[1]
+    if allow_self is true or msg.message != subject
+      karma.latest subject
       msg.send "#{subject} has #{karma.get(subject)} points"
     else
       msg.send msg.random karma.selfDeniedResponses(msg.message.user.name)   
