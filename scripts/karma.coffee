@@ -82,11 +82,10 @@ module.exports = (robot) ->
     else
       msg.send msg.random karma.selfDeniedResponses(msg.message.user.name)   
 
-  robot.hear /(\S+[^+:\s])[: ]*\+\+(\s|$)/, (msg) ->
+  robot.hear /^\+\+$/, (msg) ->
     subject = msg.match[1].toLowerCase()
     if allow_self is true or msg.message.user.name.toLowerCase() != subject
       karma.increment subject
-      karma.latest subject
       msg.send "#{subject} has #{karma.get(subject)} points"
     else
       msg.send msg.random karma.selfDeniedResponses(msg.message.user.name)  
