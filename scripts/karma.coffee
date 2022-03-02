@@ -37,7 +37,7 @@ class Karma
     @robot.brain.data.karma = @cache
 
   latest: (latestKarma) ->
-    @cache[latest] = latestKarma
+    @cache['latest'] = latestKarma
     @robot.brain.data.karma = @cache
   
   decrement: (thing) ->
