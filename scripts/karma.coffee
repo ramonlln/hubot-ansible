@@ -83,12 +83,13 @@ module.exports = (robot) ->
       msg.send msg.random karma.selfDeniedResponses(msg.message.user.name)   
 
   robot.hear /^\+\+$/, (msg) ->
-    subject = @cache(thing)
-    if allow_self is true or @cache(thing) != subject
+    subject = msg.match[1]
+    if allow_self is true or msg.message != subject
       karma.increment subject
+      karma.latest subject
       msg.send "#{subject} has #{karma.get(subject)} points"
     else
-      msg.send msg.random karma.selfDeniedResponses(msg.message.user.name)  
+      msg.send msg.random karma.selfDeniedResponses(msg.message.user.name) 
 
   robot.hear /(\S+[^-:\s])[: ]*--(\s|$)/, (msg) ->
     subject = msg.match[1].toLowerCase()
