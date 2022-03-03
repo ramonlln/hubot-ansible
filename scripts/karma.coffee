@@ -83,8 +83,8 @@ module.exports = (robot) ->
       msg.send msg.random karma.selfDeniedResponses(msg.message.user.name)   
 
   robot.hear /^\+\+$/, (msg) ->
-    subject = karma.get(thing)
-    if allow_self is true or msg.message != subject
+    subject = @cache(thing)
+    if allow_self is true or @cache(thing) != subject
       karma.increment subject
       msg.send "#{subject} has #{karma.get(subject)} points"
     else
