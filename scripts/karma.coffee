@@ -38,6 +38,7 @@ class Karma
 
   latest: (latestKarma) ->
     @cache['latest'] = latestKarma
+    console.log(latestKarma)
     @robot.brain.data.karma = @cache
   
   decrement: (thing) ->
