@@ -1,126 +1,213 @@
 # Description:
-#   Track arbitrary karma
+#   Give or take away points. Keeps track and even prints out graphs.
 #
 # Dependencies:
-#   None
+#   "underscore": ">= 1.0.0"
+#   "clark": "0.0.6"
 #
 # Configuration:
-#   KARMA_ALLOW_SELF
+#   HUBOT_PLUSPLUS_KEYWORD: the keyword that will make hubot give the
+#   score for a name and the reasons. For example you can set this to
+#   "score|karma" so hubot will answer to both keywords.
+#   If not provided will default to 'score'.
+#
+#   HUBOT_PLUSPLUS_REASON_CONJUNCTIONS: a pipe separated list of conjuntions to
+#   be used when specifying reasons. The default value is
+#   "for|because|cause|cuz|as", so it can be used like:
+#   "foo++ for being awesome" or "foo++ cuz they are awesome".
 #
 # Commands:
-#   <thing>++ - give thing some karma
-#   <thing>-- - take away some of thing's karma
-#   hubot karma <thing> - check thing's karma (if <thing> is omitted, show the top 5)
-#   hubot karma empty <thing> - empty a thing's karma
-#   hubot karma best - show the top 5
-#   hubot karma worst - show the bottom 5
+#   <name>++ [<reason>] - Increment score for a name (for a reason)
+#   <name>-- [<reason>] - Decrement score for a name (for a reason)
+#   hubot score <name> - Display the score for a name and some of the reasons
+#   hubot top <amount> - Display the top scoring <amount>
+#   hubot bottom <amount> - Display the bottom scoring <amount>
+#   hubot erase <name> [<reason>] - Remove the score for a name (for a reason)
+#
+# URLs:
+#   /hubot/scores[?name=<name>][&direction=<top|botton>][&limit=<10>]
 #
 # Author:
-#   stuartf
+#   ajacksified
 
-class Karma
 
-  constructor: (@robot) ->
-    @cache = {}
-
-    @robot.brain.on 'loaded', =>
-      if @robot.brain.data.karma
-        @cache = @robot.brain.data.karma
-
-  kill: (thing) ->
-    delete @cache[thing]
-    @robot.brain.data.karma = @cache
-
-  increment: (thing) ->
-    @cache[thing] ?= 0
-    @cache[thing] += 1
-    @robot.brain.data.karma = @cache
-
-  latest: (latestKarma) ->
-    @cache['latest'] = latestKarma
-    console.log(latestKarma)
-    @robot.brain.data.karma = @cache
-  
-  decrement: (thing) ->
-    @cache[thing] ?= 0
-    @cache[thing] -= 1
-    @robot.brain.data.karma = @cache
-
-  selfDeniedResponses: (name) ->
-    @self_denied_responses = [
-      "Hey everyone! #{name} is a narcissist!",
-      "I might just allow that next time, but no.",
-      "I can't do that #{name}."
-    ]
-
-  get: (thing) ->
-    k = if @cache[thing] then @cache[thing] else 0
-    return k
-
-  sort: ->
-    s = []
-    for key, val of @cache
-      s.push({ name: key, karma: val })
-    s.sort (a, b) -> b.karma - a.karma
-
-  top: (n = 5) ->
-    sorted = @sort()
-    sorted.slice(0, n)
-
-  bottom: (n = 5) ->
-    sorted = @sort()
-    sorted.slice(-n).reverse()
+_ = require('underscore')
+clark = require('clark')
+querystring = require('querystring')
+ScoreKeeper = require('./scorekeeper')
 
 module.exports = (robot) ->
-  karma = new Karma robot
-  allow_self = process.env.KARMA_ALLOW_SELF or "true"
+  scoreKeeper = new ScoreKeeper(robot)
+  scoreKeyword   = process.env.HUBOT_PLUSPLUS_KEYWORD or 'score'
+  reasonsKeyword = process.env.HUBOT_PLUSPLUS_REASONS or 'raisins'
+  reasonConjunctions = process.env.HUBOT_PLUSPLUS_CONJUNCTIONS or 'for|because|cause|cuz|as'
 
-  robot.hear /(\S+[^+:\s])[: ]*\+\+(\s|$)/, (msg) ->
-    subject = msg.match[1].toLowerCase()
-    if allow_self is true or msg.message.user.name.toLowerCase() != subject
-      karma.increment subject
-      msg.send "#{subject} has #{karma.get(subject)} points"
+  # sweet regex bro
+  robot.hear ///
+    # from beginning of line
+    ^
+    # the thing being upvoted, which is any number of words and spaces
+    ([\s\w'@.\-:\u3040-\u30FF\uFF01-\uFF60\u4E00-\u9FA0]*)
+    # allow for spaces after the thing being upvoted (@user ++)
+    \s*
+    # the increment/decrement operator ++ or --
+    (\+\+|--|—)
+    # optional reason for the plusplus
+    (?:\s+(?:#{reasonConjunctions})\s+(.+))?
+    $ # end of line
+  ///i, (msg) ->
+    # let's get our local vars in place
+    [dummy, name, operator, reason] = msg.match
+    from = msg.message.user.name.toLowerCase()
+    room = msg.message.room
+
+    # do some sanitizing
+    reason = reason?.trim().toLowerCase()
+
+    if name
+      if name.charAt(0) == ':'
+        name = (name.replace /(^\s*@)|([,\s]*$)/g, '').trim().toLowerCase()
+      else
+        name = (name.replace /(^\s*@)|([,:\s]*$)/g, '').trim().toLowerCase()
+
+    # check whether a name was specified. use MRU if not
+    unless name? && name != ''
+      [name, lastReason] = scoreKeeper.last(room)
+      reason = lastReason if !reason? && lastReason?
+
+    # do the {up, down}vote, and figure out what the new score is
+    [score, reasonScore] = if operator == "++"
+              scoreKeeper.add(name, from, room, reason)
+            else
+              scoreKeeper.subtract(name, from, room, reason)
+
+    # if we got a score, then display all the things and fire off events!
+    if score?
+      message = if reason?
+                  if reasonScore == 1 or reasonScore == -1
+                    if score == 1 or score == -1
+                      "#{name} has #{score} point for #{reason}."
+                    else
+                      "#{name} has #{score} points, #{reasonScore} of which is for #{reason}."
+                  else
+                    "#{name} has #{score} points, #{reasonScore} of which are for #{reason}."
+                else
+                  if score == 1
+                    "#{name} has #{score} point"
+                  else
+                    "#{name} has #{score} points"
+
+
+      msg.send message
+
+      robot.emit "plus-one", {
+        name:      name
+        direction: operator
+        room:      room
+        reason:    reason
+        from:      from
+      }
+
+  robot.respond ///
+    (?:erase )
+    # thing to be erased
+    ([\s\w'@.-:\u3040-\u30FF\uFF01-\uFF60\u4E00-\u9FA0]*)
+    # optionally erase a reason from thing
+    (?:\s+(?:for|because|cause|cuz)\s+(.+))?
+    $ # eol
+  ///i, (msg) ->
+    [__, name, reason] = msg.match
+    from = msg.message.user.name.toLowerCase()
+    user = msg.envelope.user
+    room = msg.message.room
+    reason = reason?.trim().toLowerCase()
+
+    if name
+      if name.charAt(0) == ':'
+        name = (name.replace /(^\s*@)|([,\s]*$)/g, '').trim().toLowerCase()
+      else
+        name = (name.replace /(^\s*@)|([,:\s]*$)/g, '').trim().toLowerCase()
+
+    isAdmin = @robot.auth?.hasRole(user, 'plusplus-admin') or @robot.auth?.hasRole(user, 'admin')
+
+    if not @robot.auth? or isAdmin
+      erased = scoreKeeper.erase(name, from, room, reason)
     else
-      msg.send msg.random karma.selfDeniedResponses(msg.message.user.name)   
+      return msg.reply "Sorry, you don't have authorization to do that."
 
-  robot.hear /^\+\+$/, (msg) ->
-    subject = msg.match[1]
-    if allow_self is true or msg.message != subject
-      karma.increment subject
-      karma.latest subject
-      msg.send "#{subject} has #{karma.get(subject)} points"
+    if erased?
+      message = if reason?
+                  "Erased the following reason from #{name}: #{reason}"
+                else
+                  "Erased points for #{name}"
+      msg.send message
+
+  # Catch the message asking for the score.
+  robot.respond new RegExp("(?:" + scoreKeyword + ") (for\s)?(.*)", "i"), (msg) ->
+    name = msg.match[2].trim().toLowerCase()
+
+    if name
+      if name.charAt(0) == ':'
+        name = (name.replace /(^\s*@)|([,\s]*$)/g, '')
+      else
+        name = (name.replace /(^\s*@)|([,:\s]*$)/g, '')
+
+    console.log(name)
+
+    score = scoreKeeper.scoreForUser(name)
+    reasons = scoreKeeper.reasonsForUser(name)
+
+    reasonString = if typeof reasons == 'object' && Object.keys(reasons).length > 0
+                     "#{name} has #{score} points. Here are some #{reasonsKeyword}:" +
+                     _.reduce(reasons, (memo, val, key) ->
+                       memo += "\n#{key}: #{val} points"
+                     , "")
+                   else
+                     "#{name} has #{score} points."
+
+    msg.send reasonString
+
+  robot.respond /(top|bottom) (\d+)/i, (msg) ->
+    amount = parseInt(msg.match[2]) || 10
+    message = []
+
+    tops = scoreKeeper[msg.match[1]](amount)
+
+    if tops.length > 0
+      for i in [0..tops.length-1]
+        message.push("#{i+1}. #{tops[i].name} : #{tops[i].score}")
     else
-      msg.send msg.random karma.selfDeniedResponses(msg.message.user.name) 
+      message.push("No scores to keep track of yet!")
 
-  robot.hear /(\S+[^-:\s])[: ]*--(\s|$)/, (msg) ->
-    subject = msg.match[1].toLowerCase()
-    if allow_self is true or msg.message.user.name.toLowerCase() != subject
-      karma.decrement subject
-      msg.send "#{subject} has #{karma.get(subject)} points"
+    if(msg.match[1] == "top")
+      graphSize = Math.min(tops.length, Math.min(amount, 20))
+      message.splice(0, 0, clark(_.first(_.pluck(tops, "score"), graphSize)))
+
+    msg.send message.join("\n")
+
+  robot.router.get "/#{robot.name}/normalize-points", (req, res) ->
+    scoreKeeper.normalize((score) ->
+      if score > 0
+        score = score - Math.ceil(score / 10)
+      else if score < 0
+        score = score - Math.floor(score / 10)
+
+      score
+    )
+
+    res.end JSON.stringify('done')
+
+  robot.router.get "/#{robot.name}/scores", (req, res) ->
+    query = querystring.parse(req._parsedUrl.query)
+
+    if query.name
+      obj = {}
+      obj[query.name] = scoreKeeper.scoreForUser(query.name)
+      res.end JSON.stringify(obj)
     else
-      msg.send msg.random karma.selfDeniedResponses(msg.message.user.name)
+      direction = query.direction || "top"
+      amount = query.limit || 10
 
-  robot.respond /karma empty ?(\S+[^-\s])$/i, (msg) ->
-    subject = msg.match[1].toLowerCase()
-    if allow_self is true or msg.message.user.name.toLowerCase() != subject
-      karma.kill subject
-      msg.send "#{subject} has had its karma scattered to the winds."
-    else
-      msg.send msg.random karma.selfDeniedResponses(msg.message.user.name)
+      tops = scoreKeeper[direction](amount)
 
-  robot.respond /karma( best)?$/i, (msg) ->
-    verbiage = ["The Best"]
-    for item, rank in karma.top()
-      verbiage.push "#{rank + 1}. #{item.name} - #{item.karma}"
-    msg.send verbiage.join("\n")
-
-  robot.respond /karma worst$/i, (msg) ->
-    verbiage = ["The Worst"]
-    for item, rank in karma.bottom()
-      verbiage.push "#{rank + 1}. #{item.name} - #{item.karma}"
-    msg.send verbiage.join("\n")
-
-  robot.respond /karma (\S+[^-\s])$/i, (msg) ->
-    match = msg.match[1].toLowerCase()
-    if match != "best" && match != "worst"
-      msg.send "\"#{match}\" has #{karma.get(match)} karma."
+      res.end JSON.stringify(tops, null, 2)
