@@ -4,6 +4,7 @@
   "private": true,
   "author": "brsanche <brsanche@redhat.com>",
   "description": "Hubot for Ansible Team",
+  "main": "index.coffee",
   "dependencies": {
     "clark": "^0.0.6",
     "coffee-script": "^1.12.7",
